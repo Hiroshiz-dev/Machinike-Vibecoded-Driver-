@@ -16,8 +16,7 @@ https://ais-pre-5rynuauy3fg3fc6c3betgo-399234863864.us-west1.run.app
 - **Perfis de Jogo:** criação, edição, duplicação, exclusão e backup em `.json`.
 
 ### Downloads nesta Release
-- **Android:** pacote instalável `Machenike-Hub-Android.apk`
 - **Windows:** instalador `.exe` ou executável portátil `.exe`
 - **macOS:** pacote instalador `.dmg`
 - **Linux:** executável portátil `.AppImage`
-- **iPhone / iPad e Navegador:** acesse o link público acima e toque em *Instalar App* / *Adicionar à Tela de Início*.
+- **Android, iPhone / iPad e Navegador:** acesse o link público acima e toque em *Instalar App* / *Adicionar à Tela de Início*.

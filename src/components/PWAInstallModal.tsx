@@ -219,7 +219,7 @@ export const PWAInstallButton: React.FC = () => {
                 <div className="space-y-4">
                   <div className="p-4 rounded-lg bg-[#0C0E12] border border-white/[0.08] space-y-2.5">
                     <div className="text-sm font-semibold text-[#F4F6F9]">
-                      Android (Instalação Direta PWA ou APK Nativo)
+                      Android (Instalação Direta como App Offline / PWA)
                     </div>
                     {isInstallable && !isIOS ? (
                       <button
@@ -250,13 +250,6 @@ export const PWAInstallButton: React.FC = () => {
                         </li>
                       </ol>
                     )}
-                    <p className="text-[11px] text-[#7D879B] leading-relaxed pt-1">
-                      O arquivo <strong className="text-[#CBD3E1]">Machenike-Hub-Android.apk</strong>{' '}
-                      é compilado e publicado automaticamente em{' '}
-                      <code className="font-mono text-[#E2E8F0]">releases/Machenike-Hub-Android.apk</code>{' '}
-                      e na aba <strong className="text-[#CBD3E1]">Releases</strong> ao subir o
-                      repositório no GitHub.
-                    </p>
                   </div>
 
                   <div className="p-4 rounded-lg bg-[#0C0E12] border border-white/[0.08] space-y-2">
@@ -301,9 +294,8 @@ export const PWAInstallButton: React.FC = () => {
                       <li>
                         <code className="font-mono text-[#F97316]">build-executables.yml</code> —
                         gera executáveis Windows (<code className="font-mono">.exe</code>), macOS (
-                        <code className="font-mono">.dmg</code>), Linux (
-                        <code className="font-mono">.AppImage</code>) e Android (
-                        <code className="font-mono">.apk</code>) ao publicar uma tag{' '}
+                        <code className="font-mono">.dmg</code>) e Linux (
+                        <code className="font-mono">.AppImage</code>) ao publicar uma tag{' '}
                         <code className="font-mono">v*</code>.
                       </li>
                     </ul>
@@ -341,7 +333,7 @@ git branch -M main
 git remote add origin https://github.com/SEU_USUARIO/machenike-hub.git
 git push -u origin main
 
-# Gerar executáveis (.exe, .dmg, .AppImage e .apk) no GitHub Releases:
+# Gerar executáveis Desktop (.exe, .dmg e .AppImage) no GitHub Releases:
 git tag v1.0.0
 git push origin v1.0.0`}
                     </pre>

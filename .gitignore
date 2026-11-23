@@ -2,8 +2,6 @@ node_modules/
 build/
 dist/
 release/
-android/
-ios/
 coverage/
 .DS_Store
 *.log

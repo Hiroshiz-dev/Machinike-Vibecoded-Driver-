@@ -68,11 +68,10 @@ O software identifica o controle conectado e adapta automaticamente botões extr
 
 ---
 
-## Instalação no Celular (Android APK & iOS) e Computador
+## Instalação no Celular (Android & iOS) e Computador
 
-### Celular Android (`.APK`)
-- **Download do APK no repositório:** [`releases/Machenike-Hub-Android.apk`](./releases/Machenike-Hub-Android.apk) *(compilado e atualizado automaticamente na pasta `releases/` e na aba **Releases** pelo workflow `.github/workflows/build-android-apk.yml` assim que o repositório é enviado para o GitHub)*.
-- **Instalação imediata pelo navegador (sem esperar build):** abra [https://ais-pre-5rynuauy3fg3fc6c3betgo-399234863864.us-west1.run.app](https://ais-pre-5rynuauy3fg3fc6c3betgo-399234863864.us-west1.run.app) no **Google Chrome** do celular e toque em **Instalar App** (ou *Menu ⋮ → Instalar aplicativo*).
+### Celular Android (App Offline PWA)
+- Abra [https://ais-pre-5rynuauy3fg3fc6c3betgo-399234863864.us-west1.run.app](https://ais-pre-5rynuauy3fg3fc6c3betgo-399234863864.us-west1.run.app) no **Google Chrome** do celular e toque em **Instalar App** (ou *Menu ⋮ → Instalar aplicativo*).
 
 ### iPhone e iPad (iOS)
 - Abra [https://ais-pre-5rynuauy3fg3fc6c3betgo-399234863864.us-west1.run.app](https://ais-pre-5rynuauy3fg3fc6c3betgo-399234863864.us-west1.run.app) no **Safari** → toque em **Compartilhar** → **Adicionar à Tela de Início**.
@@ -89,13 +88,12 @@ O software identifica o controle conectado e adapta automaticamente botões extr
 
 ---
 
-## Automação no GitHub (APK Automático, Pages & Releases)
+## Automação no GitHub (Pages & Releases)
 
 Ao enviar este repositório para o GitHub na branch `main`:
 
-1. **Android `.APK` automático** (`.github/workflows/build-android-apk.yml`): compila automaticamente o `Machenike-Hub-Android.apk` assinado na nuvem do GitHub, salva em `releases/Machenike-Hub-Android.apk` dentro do repositório e publica na aba **Releases**.
-2. **GitHub Pages** (`.github/workflows/deploy-pages.yml`): publique em *Settings → Pages → Source: GitHub Actions* para ter uma URL HTTPS própria no GitHub.
-3. **Executáveis Desktop + Android em Release** (`.github/workflows/build-executables.yml`): execute em *Actions → Build & Publish GitHub Release → Run workflow* ou crie uma tag `v1.0.0` para anexar `.exe`, `.dmg`, `.AppImage` e `.apk` na Release.
+1. **GitHub Pages** (`.github/workflows/deploy-pages.yml`): publique em *Settings → Pages → Source: GitHub Actions* para ter uma URL HTTPS própria no GitHub.
+2. **Executáveis Desktop em Release** (`.github/workflows/build-executables.yml`): execute em *Actions → Build & Publish GitHub Release → Run workflow* ou crie uma tag `v1.0.0` para anexar `.exe`, `.dmg` e `.AppImage` na Release.
 
 ---
 

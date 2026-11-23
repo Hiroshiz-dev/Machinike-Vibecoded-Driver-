@@ -13,4 +13,4 @@ Todas as alterações relevantes do **Machenike Hub** são documentadas neste ar
 - **Sistema de Perfis de Jogo** (criar, salvar, carregar, duplicar, excluir, exportar/importar JSON).
 - **Estúdio de Macros** com gravação ao vivo em `ms`, edição manual e simulação.
 - **Iluminação RGB Multizona** adaptada por modelo.
-- Suporte **PWA Offline** instalável no PC e Celular + workflows GitHub Actions para **GitHub Pages** e **GitHub Releases** (`.exe`, `.dmg`, `.AppImage` e `.apk`).
+- Suporte **PWA Offline** instalável no PC e Celular + workflows GitHub Actions para **GitHub Pages** e **GitHub Releases** (`.exe`, `.dmg` e `.AppImage`).

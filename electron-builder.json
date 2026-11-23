@@ -1,0 +1,43 @@
+{
+  "appId": "com.machenike.hub",
+  "productName": "Machenike Hub",
+  "copyright": "Copyright © 2026 Machenike Hub Contributors",
+  "directories": {
+    "output": "release"
+  },
+  "files": [
+    "dist/**/*",
+    "electron/**/*",
+    "public/pwa-512x512.png",
+    "package.json"
+  ],
+  "win": {
+    "icon": "public/pwa-512x512.png",
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      },
+      {
+        "target": "portable",
+        "arch": ["x64"]
+      }
+    ]
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true
+  },
+  "mac": {
+    "icon": "public/pwa-512x512.png",
+    "category": "public.app-category.utilities",
+    "target": ["dmg"]
+  },
+  "linux": {
+    "icon": "public/pwa-512x512.png",
+    "category": "Utility",
+    "target": ["AppImage"]
+  }
+}

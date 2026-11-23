@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <rect width="512" height="512" rx="112" fill="#0C0E12" />
+  <rect x="20" y="20" width="472" height="472" rx="96" stroke="#252B38" stroke-width="6" />
+  <path
+    d="M156 176H356C392 176 418 202 426 244L438 318C444 352 422 380 390 380C368 380 350 368 338 350L314 316H198L174 350C162 368 144 380 122 380C90 380 68 352 74 318L86 244C94 202 120 176 156 176Z"
+    fill="#181C24"
+    stroke="#F97316"
+    stroke-width="14"
+    stroke-linejoin="round"
+  />
+  <!-- D-Pad -->
+  <rect x="148" y="220" width="22" height="72" rx="6" fill="#F4F6F9" />
+  <rect x="123" y="245" width="72" height="22" rx="6" fill="#F4F6F9" />
+  <!-- ABXY Buttons -->
+  <circle cx="352" cy="226" r="14" fill="#F97316" />
+  <circle cx="382" cy="256" r="14" fill="#F4F6F9" />
+  <circle cx="352" cy="286" r="14" fill="#F4F6F9" />
+  <circle cx="322" cy="256" r="14" fill="#F4F6F9" />
+  <!-- Center M emblem / LED bar -->
+  <rect x="224" y="248" width="64" height="16" rx="8" fill="#F97316" />
+</svg>

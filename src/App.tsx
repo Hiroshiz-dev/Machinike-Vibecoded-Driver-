@@ -291,6 +291,7 @@ export default function App() {
     requestHidDevice,
     requestBluetoothDevice,
     scanConnectedDevices,
+    overrideDetectedTransport,
   } = useGamepad(handlePhysicalPress, handleHardwareDetected);
 
   // Persist active profile ID and active Machenike model ID
@@ -342,6 +343,19 @@ export default function App() {
 
   const handleSelectTransport = useCallback(
     (mode: ConnectionMode) => {
+      overrideDetectedTransport(mode);
+      setDetectionBanner((prev) =>
+        prev
+          ? {
+              ...prev,
+              info: {
+                ...prev.info,
+                transport: mode,
+                transportConfidence: 'exact',
+              },
+            }
+          : prev
+      );
       mutateActiveProfile((p) => ({
         ...p,
         driver: {
@@ -352,7 +366,7 @@ export default function App() {
         },
       }));
     },
-    [mutateActiveProfile]
+    [mutateActiveProfile, overrideDetectedTransport]
   );
 
   const handleSyncToController = useCallback(() => {
@@ -945,21 +959,31 @@ export default function App() {
                     reconhecido via{' '}
                     <span className="font-mono text-[#86EFAC]">
                       {detectionBanner.info.transport === 'usb'
-                        ? 'USB-C'
+                        ? 'Cabo USB (Com Fio)'
                         : detectionBanner.info.transport === 'dongle24g'
-                        ? 'Receptor 2.4 GHz'
+                        ? 'Receptor 2.4 GHz (Dongle USB 2.0)'
                         : 'Bluetooth'}
                     </span>
-                    {detectionBanner.info.confidence === 'inferred' && (
+                    {detectionBanner.info.transportConfidence === 'ambiguous' && (
                       <span className="text-[#9DB2A4]">
                         {' '}
-                        (modo X-Input genérico — confirme o modelo se necessário)
+                        — barramento USB da placa-mãe detectado (ajuste o modo se estiver usando cabo)
                       </span>
                     )}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <select
+                    aria-label="Confirmar tipo de conexão"
+                    value={activeProfile.driver.connectionMode}
+                    onChange={(e) => handleSelectTransport(e.target.value as ConnectionMode)}
+                    className="bg-[#0C0E12] border border-white/[0.12] rounded-md px-2.5 py-1 text-xs text-[#F4F6F9] focus:outline-none focus:border-[#F97316]"
+                  >
+                    <option value="dongle24g">Dongle 2.4 GHz (USB 2.0)</option>
+                    <option value="usb">Cabo USB (Com Fio)</option>
+                    <option value="bluetooth">Bluetooth</option>
+                  </select>
                   {detectionBanner.info.confidence === 'inferred' && (
                     <select
                       aria-label="Confirmar modelo Machenike"

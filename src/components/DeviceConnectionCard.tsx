@@ -28,8 +28,8 @@ interface DeviceConnectionCardProps {
 }
 
 const TRANSPORT_LABELS: Record<ConnectionMode, string> = {
-  usb: 'USB-C com fio',
-  dongle24g: 'Receptor 2.4 GHz',
+  usb: 'Cabo USB (Com Fio)',
+  dongle24g: 'Receptor 2.4 GHz (Dongle USB 2.0)',
   bluetooth: 'Bluetooth',
 };
 
@@ -57,8 +57,8 @@ export const DeviceConnectionCard: React.FC<DeviceConnectionCardProps> = ({
           </h2>
           <p className="text-xs text-[#8B95A8] mt-0.5 font-mono tabular-nums">
             {isPhysicallyDetected
-              ? `Conectado via ${TRANSPORT_LABELS[gamepad.detectedTransport ?? activeTransport]} · ${gamepad.deviceName}`
-              : `Aguardando conexão física (USB-C, 2.4 GHz ou Bluetooth) · Bancada: ${activeDevice.name}`}
+              ? `Conectado via ${TRANSPORT_LABELS[activeTransport]} · ${gamepad.deviceName}`
+              : `Aguardando conexão física (Dongle 2.4 GHz, Cabo USB ou Bluetooth) · Bancada: ${activeDevice.name}`}
             {gamepad.batteryPercent !== null ? ` · Bateria ${gamepad.batteryPercent}%` : ''}
           </p>
         </div>
@@ -73,86 +73,146 @@ export const DeviceConnectionCard: React.FC<DeviceConnectionCardProps> = ({
         </button>
       </div>
 
-      {/* 3-Protocol Direct Connection Triggers (USB / 2.4GHz / Bluetooth) */}
+      {/* 3-Protocol Selector + Direct Pairing Triggers (2.4GHz Dongle / Wired USB / Bluetooth) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <button
-          type="button"
-          onClick={() => {
-            onSelectTransport('usb');
-            onConnectUsb();
+        <div
+          onClick={() => onSelectTransport('dongle24g')}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onSelectTransport('dongle24g');
+            }
           }}
-          className={`p-3.5 rounded-lg border text-left transition-colors cursor-pointer ${
-            activeTransport === 'usb'
-              ? 'bg-[#1D1916] border-[#F97316]'
-              : 'bg-[#0C0E12] border-white/[0.08] hover:border-white/25'
-          }`}
-        >
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-sm font-semibold text-[#F4F6F9]">
-              <Usb className="w-4 h-4 text-[#F97316]" />
-              <span>Cabo USB-C</span>
-            </div>
-            <span className="font-mono text-[11px] text-[#8B95A8]">
-              {activeTransport === 'usb' ? 'Ativo' : 'Parear'}
-            </span>
-          </div>
-          <p className="text-xs text-[#7D879B] mt-1">
-            Conexão direta WebHID / Gamepad com latência mínima de 1 ms (1000 Hz).
-          </p>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            onSelectTransport('dongle24g');
-            onConnect24G();
-          }}
-          className={`p-3.5 rounded-lg border text-left transition-colors cursor-pointer ${
+          className={`p-3.5 rounded-lg border text-left transition-colors cursor-pointer flex flex-col justify-between gap-2.5 ${
             activeTransport === 'dongle24g'
               ? 'bg-[#1D1916] border-[#F97316]'
               : 'bg-[#0C0E12] border-white/[0.08] hover:border-white/25'
           }`}
         >
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-sm font-semibold text-[#F4F6F9]">
-              <Radio className="w-4 h-4 text-[#38BDF8]" />
-              <span>Receptor 2.4 GHz</span>
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-sm font-semibold text-[#F4F6F9]">
+                <Radio className="w-4 h-4 text-[#38BDF8]" />
+                <span>Receptor 2.4 GHz</span>
+              </div>
+              <span className="font-mono text-[11px] text-[#8B95A8]">
+                {activeTransport === 'dongle24g' ? 'Ativo' : 'Selecionar'}
+              </span>
             </div>
-            <span className="font-mono text-[11px] text-[#8B95A8]">
-              {activeTransport === 'dongle24g' ? 'Ativo' : 'Parear'}
-            </span>
+            <p className="text-xs text-[#7D879B] mt-1">
+              Dongle sem fio USB 2.0 conectado na placa-mãe ou dock (1000 Hz, modo X-Input).
+            </p>
           </div>
-          <p className="text-xs text-[#7D879B] mt-1">
-            Reconhece o dongle sem fio Machenike via WebHID ou modo X-Input automático.
-          </p>
-        </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelectTransport('dongle24g');
+              onConnect24G();
+            }}
+            className="self-start text-[11px] font-medium text-[#38BDF8] hover:underline cursor-pointer"
+          >
+            Vincular receptor via WebHID
+          </button>
+        </div>
 
-        <button
-          type="button"
-          onClick={() => {
-            onSelectTransport('bluetooth');
-            onConnectBluetooth();
+        <div
+          onClick={() => onSelectTransport('usb')}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onSelectTransport('usb');
+            }
           }}
-          className={`p-3.5 rounded-lg border text-left transition-colors cursor-pointer ${
+          className={`p-3.5 rounded-lg border text-left transition-colors cursor-pointer flex flex-col justify-between gap-2.5 ${
+            activeTransport === 'usb'
+              ? 'bg-[#1D1916] border-[#F97316]'
+              : 'bg-[#0C0E12] border-white/[0.08] hover:border-white/25'
+          }`}
+        >
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-sm font-semibold text-[#F4F6F9]">
+                <Usb className="w-4 h-4 text-[#F97316]" />
+                <span>Cabo USB (Com Fio)</span>
+              </div>
+              <span className="font-mono text-[11px] text-[#8B95A8]">
+                {activeTransport === 'usb' ? 'Ativo' : 'Selecionar'}
+              </span>
+            </div>
+            <p className="text-xs text-[#7D879B] mt-1">
+              Conexão direta por cabo USB-C / USB-A com latência mínima de 1 ms (1000 Hz).
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelectTransport('usb');
+              onConnectUsb();
+            }}
+            className="self-start text-[11px] font-medium text-[#F97316] hover:underline cursor-pointer"
+          >
+            Vincular cabo via WebHID
+          </button>
+        </div>
+
+        <div
+          onClick={() => onSelectTransport('bluetooth')}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onSelectTransport('bluetooth');
+            }
+          }}
+          className={`p-3.5 rounded-lg border text-left transition-colors cursor-pointer flex flex-col justify-between gap-2.5 ${
             activeTransport === 'bluetooth'
               ? 'bg-[#1D1916] border-[#F97316]'
               : 'bg-[#0C0E12] border-white/[0.08] hover:border-white/25'
           }`}
         >
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-sm font-semibold text-[#F4F6F9]">
-              <Bluetooth className="w-4 h-4 text-[#60A5FA]" />
-              <span>Bluetooth 5.0 / 5.3</span>
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-sm font-semibold text-[#F4F6F9]">
+                <Bluetooth className="w-4 h-4 text-[#60A5FA]" />
+                <span>Bluetooth 5.0 / 5.3</span>
+              </div>
+              <span className="font-mono text-[11px] text-[#8B95A8]">
+                {activeTransport === 'bluetooth' ? 'Ativo' : 'Selecionar'}
+              </span>
             </div>
-            <span className="font-mono text-[11px] text-[#8B95A8]">
-              {activeTransport === 'bluetooth' ? 'Ativo' : 'Parear'}
-            </span>
+            <p className="text-xs text-[#7D879B] mt-1">
+              Ideal para celular (Android/iOS) e notebooks, com leitura de bateria via GATT.
+            </p>
           </div>
-          <p className="text-xs text-[#7D879B] mt-1">
-            Busca dispositivos Machenike BLE, identifica o modelo e lê nível de bateria.
-          </p>
-        </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelectTransport('bluetooth');
+              onConnectBluetooth();
+            }}
+            className="self-start text-[11px] font-medium text-[#60A5FA] hover:underline cursor-pointer"
+          >
+            Buscar dispositivo Bluetooth
+          </button>
+        </div>
       </div>
+
+      {isPhysicallyDetected && gamepad.transportConfidence === 'ambiguous' && (
+        <p className="text-xs text-[#8B95A8] leading-relaxed">
+          Nota técnica: receptores <strong className="text-[#CBD3E1]">2.4 GHz USB 2.0</strong> plugados na
+          placa-mãe são reportados pelo sistema operacional no mesmo barramento USB de um cabo com fio.
+          Sua seleção acima (<strong className="text-[#F4F6F9]">{TRANSPORT_LABELS[activeTransport]}</strong>) é
+          salva automaticamente para este dispositivo.
+        </p>
+      )}
 
       {connectionMessage && (
         <p className="text-xs text-[#D97706] leading-relaxed">{connectionMessage}</p>
@@ -202,7 +262,7 @@ export const DeviceConnectionCard: React.FC<DeviceConnectionCardProps> = ({
                 </div>
                 {isAutoMatched && (
                   <div className="text-[10px] font-mono text-[#22C55E] mt-1">
-                    Detectado via {TRANSPORT_LABELS[gamepad.detectedTransport ?? activeTransport]}
+                    Detectado via {TRANSPORT_LABELS[activeTransport]}
                   </div>
                 )}
               </button>

@@ -540,8 +540,8 @@ export const DriverCalibrationView: React.FC<DriverCalibrationViewProps> = ({
               <div className="grid grid-cols-3 gap-1 p-1 bg-[#0C0E12] border border-white/[0.08] rounded-lg">
                 {(
                   [
-                    { id: 'usb', label: 'USB-C' },
                     { id: 'dongle24g', label: '2.4 GHz' },
+                    { id: 'usb', label: 'Cabo USB' },
                     { id: 'bluetooth', label: 'Bluetooth' },
                   ] as Array<{ id: ConnectionMode; label: string }>
                 ).map((m) => (

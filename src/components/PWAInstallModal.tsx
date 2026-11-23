@@ -173,17 +173,44 @@ export const PWAInstallButton: React.FC = () => {
                     )}
                   </div>
 
-                  <div className="p-4 rounded-lg bg-[#0C0E12] border border-white/[0.08] space-y-2">
+                  <div className="p-4 rounded-lg bg-[#0C0E12] border border-white/[0.08] space-y-3">
                     <div className="text-sm font-semibold text-[#F4F6F9]">
-                      Executável Nativo (.EXE, .DMG e .AppImage)
+                      Executáveis de Instalação para Computador (.BAT / .COMMAND / .SH / .EXE)
                     </div>
                     <p className="text-[#8B95A8] leading-relaxed">
-                      O projeto inclui configuração completa do <strong className="text-[#E2E8F0]">Electron</strong>{' '}
-                      com permissões automáticas de HID e Bluetooth. Ao criar uma tag{' '}
-                      <code className="font-mono text-[#F97316]">v1.0.0</code> no GitHub, os
-                      instaladores para Windows, macOS e Linux são gerados automaticamente em{' '}
-                      <strong className="text-[#E2E8F0]">GitHub Releases</strong>.
+                      Baixe o instalador correspondente ao seu sistema (também disponível na pasta{' '}
+                      <code className="font-mono text-[#E2E8F0]">installers/</code> do repositório
+                      GitHub) para gerar o executável nativo <strong className="text-[#E2E8F0]">.EXE</strong>,{' '}
+                      <strong className="text-[#E2E8F0]">.DMG</strong> ou{' '}
+                      <strong className="text-[#E2E8F0]">.AppImage</strong> com suporte a USB,
+                      Dongle 2.4 GHz e Bluetooth:
                     </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <a
+                        href={`${import.meta.env.BASE_URL}installers/windows/Instalar-Machenike-Hub.bat`}
+                        download="Instalar-Machenike-Hub.bat"
+                        className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#1A1F2B] hover:bg-[#232A3A] border border-white/[0.1] text-[#F4F6F9] font-medium transition-colors"
+                      >
+                        <Download className="w-3.5 h-3.5 text-[#F97316]" />
+                        Windows (.bat)
+                      </a>
+                      <a
+                        href={`${import.meta.env.BASE_URL}installers/macos/Instalar-Machenike-Hub.command`}
+                        download="Instalar-Machenike-Hub.command"
+                        className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#1A1F2B] hover:bg-[#232A3A] border border-white/[0.1] text-[#F4F6F9] font-medium transition-colors"
+                      >
+                        <Download className="w-3.5 h-3.5 text-[#F97316]" />
+                        macOS (.command)
+                      </a>
+                      <a
+                        href={`${import.meta.env.BASE_URL}installers/linux/instalar-machenike-hub.sh`}
+                        download="instalar-machenike-hub.sh"
+                        className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#1A1F2B] hover:bg-[#232A3A] border border-white/[0.1] text-[#F4F6F9] font-medium transition-colors"
+                      >
+                        <Download className="w-3.5 h-3.5 text-[#F97316]" />
+                        Linux (.sh)
+                      </a>
+                    </div>
                   </div>
                 </div>
               )}
@@ -192,7 +219,7 @@ export const PWAInstallButton: React.FC = () => {
                 <div className="space-y-4">
                   <div className="p-4 rounded-lg bg-[#0C0E12] border border-white/[0.08] space-y-2.5">
                     <div className="text-sm font-semibold text-[#F4F6F9]">
-                      Android (Chrome — Bluetooth &amp; USB-OTG)
+                      Android (Instalação Direta PWA ou APK Nativo)
                     </div>
                     {isInstallable && !isIOS ? (
                       <button
@@ -223,10 +250,24 @@ export const PWAInstallButton: React.FC = () => {
                         </li>
                       </ol>
                     )}
-                    <p className="text-[11px] text-[#7D879B]">
-                      O repositório também inclui <code className="font-mono text-[#E2E8F0]">capacitor.config.ts</code>{' '}
-                      e workflow GitHub Actions para compilar um <strong className="text-[#CBD3E1]">APK Android</strong> instalável.
-                    </p>
+                    <div className="pt-2 flex flex-wrap gap-2">
+                      <a
+                        href={`${import.meta.env.BASE_URL}installers/android/Gerar-APK-Android.bat`}
+                        download="Gerar-APK-Android.bat"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1A1F2B] hover:bg-[#232A3A] border border-white/[0.1] text-[#F4F6F9] font-medium transition-colors"
+                      >
+                        <Download className="w-3.5 h-3.5 text-[#22C55E]" />
+                        Gerador APK (Windows .bat)
+                      </a>
+                      <a
+                        href={`${import.meta.env.BASE_URL}installers/android/gerar-apk-android.sh`}
+                        download="gerar-apk-android.sh"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1A1F2B] hover:bg-[#232A3A] border border-white/[0.1] text-[#F4F6F9] font-medium transition-colors"
+                      >
+                        <Download className="w-3.5 h-3.5 text-[#22C55E]" />
+                        Gerador APK (Linux/macOS .sh)
+                      </a>
+                    </div>
                   </div>
 
                   <div className="p-4 rounded-lg bg-[#0C0E12] border border-white/[0.08] space-y-2">

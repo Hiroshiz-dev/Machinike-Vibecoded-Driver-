@@ -10,6 +10,7 @@ import {
   MACHENIKE_VENDOR_IDS,
   MachenikeModelId,
   identifyMachenikeDevice,
+  saveTransportOverride,
 } from '../types/devices';
 
 export interface LiveGamepadState {
@@ -18,6 +19,7 @@ export interface LiveGamepadState {
   detectedModelId: MachenikeModelId | null;
   detectedTransport: ConnectionMode | null;
   detectionConfidence: 'exact' | 'inferred' | null;
+  transportConfidence: 'exact' | 'ambiguous' | null;
   detectionSource: 'gamepad' | 'webhid' | 'bluetooth' | 'virtual';
   hidConnected: boolean;
   hidDeviceName: string | null;
@@ -74,6 +76,7 @@ export function useGamepad(
   const [detectedModelId, setDetectedModelId] = useState<MachenikeModelId | null>(null);
   const [detectedTransport, setDetectedTransport] = useState<ConnectionMode | null>(null);
   const [detectionConfidence, setDetectionConfidence] = useState<'exact' | 'inferred' | null>(null);
+  const [transportConfidence, setTransportConfidence] = useState<'exact' | 'ambiguous' | null>(null);
   const [detectionSource, setDetectionSource] = useState<
     'gamepad' | 'webhid' | 'bluetooth' | 'virtual'
   >('virtual');
@@ -125,10 +128,23 @@ export function useGamepad(
       setDetectedModelId(info.modelId);
       setDetectedTransport(info.transport);
       setDetectionConfidence(info.confidence);
+      setTransportConfidence(info.transportConfidence);
       setDetectionSource(source);
       onHardwareDetectedRef.current?.(info, source);
     },
     []
+  );
+
+  const overrideDetectedTransport = useCallback(
+    (mode: ConnectionMode) => {
+      setDetectedTransport(mode);
+      setTransportConfidence('exact');
+      const currentId = lastDetectedPadIdRef.current || hidDeviceName || btDeviceName || deviceName;
+      if (currentId && (connected || hidConnected || btConnected)) {
+        saveTransportOverride(currentId, mode);
+      }
+    },
+    [connected, hidConnected, btConnected, hidDeviceName, btDeviceName, deviceName]
   );
 
   const setVirtualButton = useCallback((btn: PhysicalButtonId, down: boolean) => {
@@ -581,6 +597,7 @@ export function useGamepad(
       detectedModelId,
       detectedTransport,
       detectionConfidence,
+      transportConfidence,
       detectionSource,
       hidConnected,
       hidDeviceName,
@@ -607,5 +624,6 @@ export function useGamepad(
     requestHidDevice,
     requestBluetoothDevice,
     scanConnectedDevices,
+    overrideDetectedTransport,
   };
 }

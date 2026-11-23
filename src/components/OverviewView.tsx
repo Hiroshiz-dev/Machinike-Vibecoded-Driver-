@@ -57,8 +57,8 @@ const RGB_MODE_LABELS: Record<string, string> = {
 };
 
 const CONNECTION_LABELS: Record<ConnectionMode, string> = {
-  usb: 'Cabo USB-C',
-  dongle24g: 'Receptor 2.4 GHz',
+  usb: 'Cabo USB (Com Fio)',
+  dongle24g: 'Dongle 2.4 GHz (USB 2.0)',
   bluetooth: 'Bluetooth',
 };
 
@@ -103,7 +103,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
 
   const activeVibrationEvents = profile.driver.vibrationEvents.filter((e) => e.enabled).length;
 
-  const activeTransport = gamepad.detectedTransport ?? profile.driver.connectionMode;
+  const activeTransport = profile.driver.connectionMode;
   const TransportIcon =
     activeTransport === 'bluetooth'
       ? Bluetooth

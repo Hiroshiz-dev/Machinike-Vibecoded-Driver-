@@ -16,6 +16,7 @@ import {
 import {
   ConnectionMode,
   ControllerProfile,
+  DockConfig,
   PhysicalButtonId,
   getButtonsForDevice,
 } from '../types/controller';
@@ -24,6 +25,7 @@ import { LiveGamepadState } from '../hooks/useGamepad';
 import { ControllerDiagram } from './ControllerDiagram';
 import { InputTesterPanel } from './InputTesterPanel';
 import { DeviceConnectionCard } from './DeviceConnectionCard';
+import { DockStationPanel } from './DockStationPanel';
 
 export type ActiveSection = 'overview' | 'profiles' | 'mapping' | 'macros' | 'rgb' | 'driver';
 
@@ -45,6 +47,11 @@ interface OverviewViewProps {
   onConnect24G: () => void;
   onConnectBluetooth: () => void;
   onScanDevices: () => void;
+  onUpdateDock: (dock: DockConfig) => void;
+  onConnectDock: () => void;
+  onSendDockRgb: () => void;
+  onToggleDocked: (docked: boolean) => void;
+  onSetSimulatedBattery: (percent: number) => void;
 }
 
 const RGB_MODE_LABELS: Record<string, string> = {
@@ -80,6 +87,11 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   onConnect24G,
   onConnectBluetooth,
   onScanDevices,
+  onUpdateDock,
+  onConnectDock,
+  onSendDockRgb,
+  onToggleDocked,
+  onSetSimulatedBattery,
 }) => {
   const [diagramView, setDiagramView] = useState<'front' | 'rear'>('front');
 
@@ -241,6 +253,22 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                   {gamepad.batteryPercent !== null ? ` · ${gamepad.batteryPercent}%` : ''}
                 </span>
               </div>
+              {deviceSpec.hasChargingDock && gamepad.batteryPercent !== null && (
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[#8B95A8]">Dock &amp; Carga</span>
+                  <span
+                    className={`font-mono text-xs tabular-nums ${
+                      gamepad.isDocked ? 'text-[#22C55E]' : 'text-[#CBD3E1]'
+                    }`}
+                  >
+                    {gamepad.isDocked
+                      ? gamepad.batteryPercent >= 100
+                        ? '100% na Dock'
+                        : `Carregando · falta ${100 - gamepad.batteryPercent}%`
+                      : `${gamepad.batteryPercent}% · falta ${100 - gamepad.batteryPercent}%`}
+                  </span>
+                </div>
+              )}
               <div className="flex items-center justify-between gap-3">
                 <span className="text-[#8B95A8]">Modo Turbina</span>
                 <span className="font-mono tabular-nums text-[#F4F6F9]">
@@ -363,6 +391,21 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
         onConnectBluetooth={onConnectBluetooth}
         onScanDevices={onScanDevices}
       />
+
+      {/* Magnetic Charging Dock & Charge-to-100% Telemetry (Only for Dock-Capable Models) */}
+      {deviceSpec.hasChargingDock && (
+        <DockStationPanel
+          deviceSpec={deviceSpec}
+          dock={profile.dock}
+          controllerRgb={profile.rgb}
+          gamepad={gamepad}
+          onUpdateDock={onUpdateDock}
+          onConnectDock={onConnectDock}
+          onSendDockRgb={onSendDockRgb}
+          onToggleDocked={onToggleDocked}
+          onSetSimulatedBattery={onSetSimulatedBattery}
+        />
+      )}
 
       {/* Real-Time Visual Input Tester (Buttons, Analog Sticks, Triggers & Event Feed) */}
       <InputTesterPanel

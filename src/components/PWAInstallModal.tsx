@@ -250,24 +250,13 @@ export const PWAInstallButton: React.FC = () => {
                         </li>
                       </ol>
                     )}
-                    <div className="pt-2 flex flex-wrap gap-2">
-                      <a
-                        href={`${import.meta.env.BASE_URL}installers/android/Gerar-APK-Android.bat`}
-                        download="Gerar-APK-Android.bat"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1A1F2B] hover:bg-[#232A3A] border border-white/[0.1] text-[#F4F6F9] font-medium transition-colors"
-                      >
-                        <Download className="w-3.5 h-3.5 text-[#22C55E]" />
-                        Gerador APK (Windows .bat)
-                      </a>
-                      <a
-                        href={`${import.meta.env.BASE_URL}installers/android/gerar-apk-android.sh`}
-                        download="gerar-apk-android.sh"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1A1F2B] hover:bg-[#232A3A] border border-white/[0.1] text-[#F4F6F9] font-medium transition-colors"
-                      >
-                        <Download className="w-3.5 h-3.5 text-[#22C55E]" />
-                        Gerador APK (Linux/macOS .sh)
-                      </a>
-                    </div>
+                    <p className="text-[11px] text-[#7D879B] leading-relaxed pt-1">
+                      O arquivo <strong className="text-[#CBD3E1]">Machenike-Hub-Android.apk</strong>{' '}
+                      é compilado e publicado automaticamente em{' '}
+                      <code className="font-mono text-[#E2E8F0]">releases/Machenike-Hub-Android.apk</code>{' '}
+                      e na aba <strong className="text-[#CBD3E1]">Releases</strong> ao subir o
+                      repositório no GitHub.
+                    </p>
                   </div>
 
                   <div className="p-4 rounded-lg bg-[#0C0E12] border border-white/[0.08] space-y-2">

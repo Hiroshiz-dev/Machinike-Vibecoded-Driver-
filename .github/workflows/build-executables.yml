@@ -1,10 +1,15 @@
-name: Build Desktop & Android Executables
+name: Build & Publish GitHub Release (PC & Mobile)
 
 on:
   push:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Versão da Release (ex.: v1.0.0)'
+        required: true
+        default: 'v1.0.0'
 
 permissions:
   contents: write
@@ -25,7 +30,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
 
       - name: Install dependencies & Electron packager
         run: |
@@ -61,7 +65,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
 
       - name: Setup Java 21
         uses: actions/setup-java@v4
@@ -84,30 +87,53 @@ jobs:
           npx cap add android || true
           npx cap sync android
 
-      - name: Compile Android Debug APK
+      - name: Compile Android APK
         working-directory: android
         run: ./gradlew assembleDebug
+
+      - name: Rename Android APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk Machenike-Hub-Android.apk
 
       - name: Upload Android APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: android-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: Machenike-Hub-Android.apk
 
   publish-release:
     name: Publish GitHub Release
     needs: [build-desktop, build-android]
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: always() && (needs.build-desktop.result == 'success' || needs.build-android.result == 'success')
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: release-artifacts
           merge-multiple: true
 
+      - name: Determine release tag
+        id: meta
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ inputs.tag || 'v1.0.0' }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          generate_release_notes: true
-          files: release-artifacts/*
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: Machenike Hub ${{ steps.meta.outputs.tag }}
+          body_path: .github/RELEASE_NOTES.md
+          draft: false
+          prerelease: false
+          files: |
+            release-artifacts/*
+            installers/windows/Instalar-Machenike-Hub.bat
+            installers/macos/Instalar-Machenike-Hub.command
+            installers/linux/instalar-machenike-hub.sh

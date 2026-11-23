@@ -19,6 +19,7 @@ import {
   ButtonBinding,
   ConnectionMode,
   ControllerProfile,
+  DockConfig,
   DriverConfig,
   INITIAL_MACROS,
   MacroDefinition,
@@ -26,6 +27,7 @@ import {
   PhysicalButtonId,
   RgbConfig,
   createDefaultBindings,
+  createDefaultDockConfig,
   createDefaultVibrationEvents,
   createDefaultVibrationPatterns,
   createFactoryDriverConfig,
@@ -179,6 +181,10 @@ function hydrateProfile(
       reactiveColor: '#FFFFFF',
       direction: 'ltr',
     },
+    dock: {
+      ...createDefaultDockConfig(),
+      ...(raw.dock ?? {}),
+    },
     driver,
     createdAt: raw.createdAt || raw.updatedAt || new Date().toISOString().slice(0, 10),
     updatedAt: raw.updatedAt || new Date().toISOString().slice(0, 10),
@@ -289,10 +295,40 @@ export default function App() {
     playVibrationPattern,
     stopVibrationPattern,
     requestHidDevice,
+    requestDockDevice,
     requestBluetoothDevice,
     scanConnectedDevices,
     overrideDetectedTransport,
+    sendRgbToHardware,
+    sendDockRgbToHardware,
+    setDockedState,
+    setSimulatedBattery,
   } = useGamepad(handlePhysicalPress, handleHardwareDetected);
+
+  // Auto-transmit RGB changes (debounced) whenever a writable WebHID or BLE GATT channel is active
+  useEffect(() => {
+    if (!gamepad.hasWritableRgbChannel) return;
+    const timer = window.setTimeout(() => {
+      void sendRgbToHardware(activeProfile.rgb);
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [gamepad.hasWritableRgbChannel, activeProfile.rgb, sendRgbToHardware]);
+
+  // Auto-transmit Charging Dock RGB changes when a dock-capable controller has an active HID/BLE channel
+  useEffect(() => {
+    if (!activeDeviceSpec.hasChargingDock) return;
+    if (!gamepad.hasWritableRgbChannel) return;
+    const timer = window.setTimeout(() => {
+      void sendDockRgbToHardware(activeProfile.dock, activeProfile.rgb);
+    }, 150);
+    return () => window.clearTimeout(timer);
+  }, [
+    activeDeviceSpec.hasChargingDock,
+    gamepad.hasWritableRgbChannel,
+    activeProfile.dock,
+    activeProfile.rgb,
+    sendDockRgbToHardware,
+  ]);
 
   // Persist active profile ID and active Machenike model ID
   useEffect(() => {
@@ -372,6 +408,12 @@ export default function App() {
   const handleSyncToController = useCallback(() => {
     setSyncState('syncing');
     persistProfiles(profiles);
+    if (gamepad.hasWritableRgbChannel) {
+      void sendRgbToHardware(activeProfile.rgb);
+      if (activeDeviceSpec.hasChargingDock) {
+        void sendDockRgbToHardware(activeProfile.dock, activeProfile.rgb);
+      }
+    }
     window.setTimeout(() => {
       setSyncState('synced');
       setHasUnsavedChanges(false);
@@ -380,7 +422,18 @@ export default function App() {
       }
       window.setTimeout(() => setSyncState('idle'), 2200);
     }, 260);
-  }, [profiles, persistProfiles, activeProfile.driver.vibrationEnabled, triggerRumble]);
+  }, [
+    profiles,
+    persistProfiles,
+    activeProfile.driver.vibrationEnabled,
+    activeProfile.rgb,
+    activeProfile.dock,
+    activeDeviceSpec.hasChargingDock,
+    gamepad.hasWritableRgbChannel,
+    sendRgbToHardware,
+    sendDockRgbToHardware,
+    triggerRumble,
+  ]);
 
   // Profile CRUD operations
   const handleCreateProfile = useCallback(
@@ -420,6 +473,7 @@ export default function App() {
                 reactiveColor: '#FFFFFF',
                 direction: 'ltr',
               },
+              dock: createDefaultDockConfig(),
               driver: createFactoryDriverConfig(),
               createdAt: today,
               updatedAt: today,
@@ -513,6 +567,13 @@ export default function App() {
   const handleUpdateRgb = useCallback(
     (rgb: RgbConfig) => {
       mutateActiveProfile((p) => ({ ...p, rgb }));
+    },
+    [mutateActiveProfile]
+  );
+
+  const handleUpdateDock = useCallback(
+    (dock: DockConfig) => {
+      mutateActiveProfile((p) => ({ ...p, dock }));
     },
     [mutateActiveProfile]
   );
@@ -1029,6 +1090,11 @@ export default function App() {
                 onConnect24G={() => requestHidDevice('dongle24g')}
                 onConnectBluetooth={requestBluetoothDevice}
                 onScanDevices={scanConnectedDevices}
+                onUpdateDock={handleUpdateDock}
+                onConnectDock={() => void requestDockDevice()}
+                onSendDockRgb={() => void sendDockRgbToHardware(activeProfile.dock, activeProfile.rgb)}
+                onToggleDocked={setDockedState}
+                onSetSimulatedBattery={setSimulatedBattery}
               />
             )}
 
@@ -1080,7 +1146,15 @@ export default function App() {
                 profile={activeProfile}
                 gamepad={gamepad}
                 onUpdateRgb={handleUpdateRgb}
+                onUpdateDock={handleUpdateDock}
                 onPulseButton={pulseVirtualButton}
+                onApplyRgbToHardware={() => void sendRgbToHardware(activeProfile.rgb)}
+                onApplyDockRgbToHardware={() =>
+                  void sendDockRgbToHardware(activeProfile.dock, activeProfile.rgb)
+                }
+                onConnectHid={() => void requestHidDevice()}
+                onConnectDock={() => void requestDockDevice()}
+                onConnectBluetooth={() => void requestBluetoothDevice()}
               />
             )}
 

@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
-import { Sparkles, Zap } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { BatteryCharging, Bluetooth, Send, Sparkles, Sun, Usb, Zap } from 'lucide-react';
 import {
   ControllerProfile,
+  DockConfig,
+  DockRgbMode,
   PhysicalButtonId,
   RgbConfig,
   RgbMode,
@@ -9,6 +11,7 @@ import {
 } from '../types/controller';
 import { MachenikeDeviceSpec } from '../types/devices';
 import { LiveGamepadState } from '../hooks/useGamepad';
+import { resolveDockRgbColor } from '../utils/rgbProtocol';
 import { ControllerDiagram } from './ControllerDiagram';
 
 interface RgbLightingViewProps {
@@ -16,7 +19,13 @@ interface RgbLightingViewProps {
   profile: ControllerProfile;
   gamepad: LiveGamepadState;
   onUpdateRgb: (rgb: RgbConfig) => void;
+  onUpdateDock: (dock: DockConfig) => void;
   onPulseButton: (btn: PhysicalButtonId) => void;
+  onApplyRgbToHardware: () => void;
+  onApplyDockRgbToHardware: () => void;
+  onConnectHid: () => void;
+  onConnectDock: () => void;
+  onConnectBluetooth: () => void;
 }
 
 const RGB_MODES: Array<{ id: RgbMode; title: string; subtitle: string }> = [
@@ -48,35 +57,75 @@ export const RgbLightingView: React.FC<RgbLightingViewProps> = ({
   profile,
   gamepad,
   onUpdateRgb,
+  onUpdateDock,
   onPulseButton,
+  onApplyRgbToHardware,
+  onApplyDockRgbToHardware,
+  onConnectHid,
+  onConnectDock,
+  onConnectBluetooth,
 }) => {
-  const [activeZone, setActiveZone] = useState<ZoneKey>('leftStrip');
+  const [activeZone, setActiveZone] = useState<ZoneKey>(
+    deviceSpec.rgbZones === 1 ? 'centerRing' : 'leftStrip'
+  );
   const [diagramView, setDiagramView] = useState<'front' | 'rear'>('front');
-  const { rgb } = profile;
+  const { rgb, dock } = profile;
+
+  useEffect(() => {
+    if (deviceSpec.rgbZones === 1) {
+      setActiveZone('centerRing');
+    }
+  }, [deviceSpec.rgbZones]);
 
   const zoneLabels =
     deviceSpec.rgbStyle === 'rings'
       ? { left: 'Anel Analógico Esq.', center: 'Anel Central Home', right: 'Anel Analógico Dir.' }
       : { left: 'Faixa Esquerda', center: 'Anel Central Home', right: 'Faixa Direita' };
 
-  const activeColor = rgb.syncZones ? rgb.zones.leftStrip : rgb.zones[activeZone];
+  const activeColor =
+    rgb.syncZones || deviceSpec.rgbZones === 1
+      ? deviceSpec.rgbZones === 1 && !rgb.syncZones
+        ? rgb.zones.centerRing
+        : rgb.zones.leftStrip
+      : rgb.zones[activeZone];
+
+  const [hexDraft, setHexDraft] = useState(activeColor.toUpperCase());
+
+  useEffect(() => {
+    setHexDraft(activeColor.toUpperCase());
+  }, [activeColor]);
 
   const handleColorChange = (hex: string) => {
-    if (rgb.syncZones) {
+    const normalized = hex.startsWith('#') ? hex : `#${hex}`;
+    if (rgb.syncZones || deviceSpec.rgbZones === 1) {
       onUpdateRgb({
         ...rgb,
-        zones: { leftStrip: hex, rightStrip: hex, centerRing: hex },
+        zones: { leftStrip: normalized, rightStrip: normalized, centerRing: normalized },
       });
     } else {
       onUpdateRgb({
         ...rgb,
-        zones: { ...rgb.zones, [activeZone]: hex },
+        zones: { ...rgb.zones, [activeZone]: normalized },
       });
     }
   };
 
+  const batteryPct = Math.max(0, Math.min(100, Math.round(gamepad.batteryPercent ?? 68)));
+  const remainingPct = Math.max(0, 100 - batteryPct);
+  const effectiveDockColor = resolveDockRgbColor(dock, rgb, batteryPct);
+
+  const dockModeOptions: Array<{ id: DockRgbMode; title: string; subtitle: string }> = [
+    { id: 'battery-indicator', title: 'Indicador de Bateria', subtitle: 'Cor varia conforme % de carga' },
+    { id: 'sync', title: 'Sincronizado', subtitle: 'Espelha a cor ativa do controle' },
+    { id: 'static', title: 'Estático', subtitle: 'Cor fixa na faixa da base' },
+    { id: 'breathing', title: 'Respiração', subtitle: 'Pulso contínuo de brilho' },
+    { id: 'rainbow', title: 'Arco-íris', subtitle: 'Ciclo RGB na base magnética' },
+    { id: 'off', title: 'Desligado', subtitle: 'LEDs da base apagados' },
+  ];
+
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-stretch">
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-stretch">
       {/* Live Multi-Zone RGB Preview Focal Anchor */}
       <section className="xl:col-span-7 bg-[#14171E] border border-white/[0.08] rounded-xl p-6 flex flex-col justify-between">
         <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-white/[0.07]">
@@ -346,13 +395,19 @@ export const RgbLightingView: React.FC<RgbLightingViewProps> = ({
                 </div>
                 <input
                   type="text"
-                  value={activeColor.toUpperCase()}
+                  value={hexDraft}
+                  maxLength={7}
                   onChange={(e) => {
-                    const val = e.target.value;
-                    if (/^#[0-9A-Fa-f]{6}$/.test(val)) {
-                      handleColorChange(val);
+                    let raw = e.target.value.toUpperCase().replace(/[^#0-9A-F]/g, '');
+                    if (!raw.startsWith('#')) {
+                      raw = `#${raw.replace(/#/g, '')}`;
+                    }
+                    setHexDraft(raw.slice(0, 7));
+                    if (/^#[0-9A-F]{6}$/.test(raw)) {
+                      handleColorChange(raw);
                     }
                   }}
+                  onBlur={() => setHexDraft(activeColor.toUpperCase())}
                   className="w-full bg-[#0C0E12] border border-white/[0.08] rounded-md px-2.5 py-1.5 font-mono text-xs text-[#F4F6F9] focus:outline-none focus:border-[#F97316]"
                 />
               </div>
@@ -400,7 +455,253 @@ export const RgbLightingView: React.FC<RgbLightingViewProps> = ({
             )}
           </div>
         )}
+
+        {/* Physical Hardware LED Sync Panel */}
+        <div className="pt-4 border-t border-white/[0.07] space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <div className="text-xs font-semibold text-[#F4F6F9]">
+                Envio de RGB para o Controle Físico
+              </div>
+              <div className="text-[11px] text-[#8B95A8] mt-0.5">
+                {gamepad.hasWritableRgbChannel
+                  ? `Canal de gravação ativo (${gamepad.hidConnected ? 'WebHID' : 'Bluetooth BLE GATT'})`
+                  : 'Canal de gravação desconectado (modo X-Input só lê botões)'}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onApplyRgbToHardware}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#F97316] hover:bg-[#EA6A0E] text-[#0C0E12] text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <Send className="w-3.5 h-3.5" />
+              Enviar RGB
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={onConnectHid}
+              className="inline-flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-lg bg-[#0C0E12] hover:bg-[#1A1F2B] border border-white/[0.08] text-[11px] font-medium text-[#E2E8F0] transition-colors cursor-pointer"
+            >
+              <Usb className="w-3.5 h-3.5 text-[#F97316]" />
+              Vincular Canal HID
+            </button>
+            <button
+              type="button"
+              onClick={onConnectBluetooth}
+              className="inline-flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-lg bg-[#0C0E12] hover:bg-[#1A1F2B] border border-white/[0.08] text-[11px] font-medium text-[#E2E8F0] transition-colors cursor-pointer"
+            >
+              <Bluetooth className="w-3.5 h-3.5 text-[#60A5FA]" />
+              Vincular BLE (KeyLinker)
+            </button>
+          </div>
+
+          {gamepad.rgbSyncStatus && (
+            <p
+              className={`text-[11px] leading-relaxed ${
+                gamepad.rgbSyncStatus.sent ? 'text-[#22C55E]' : 'text-[#F59E0B]'
+              }`}
+            >
+              {gamepad.rgbSyncStatus.detail}
+            </p>
+          )}
+
+          <p className="text-[11px] text-[#7D879B] leading-relaxed">
+            Dica: no Windows, o dongle 2.4 GHz em modo X-Input puro pode bloquear gravação HID pelo
+            navegador. Para alterar os LEDs físicos em tempo real, vincule pelo canal{' '}
+            <strong className="text-[#CBD3E1]">BLE (KeyLinker)</strong>, execute via app desktop
+            Electron ou use o atalho físico <strong className="text-[#CBD3E1]">FN / Turbo + Direcional</strong> no controle.
+          </p>
+        </div>
       </aside>
+    </div>
+
+      {/* Dedicated Charging Dock RGB Controls (Shown Only on Dock-Capable Models) */}
+      {deviceSpec.hasChargingDock && (
+        <section className="bg-[#14171E] border border-white/[0.08] rounded-xl p-6 space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-white/[0.07]">
+            <div className="flex items-center gap-3">
+              <Sun className="w-5 h-5 text-[#F97316] shrink-0" />
+              <div>
+                <h2 className="text-base font-semibold text-[#F4F6F9]">
+                  Iluminação RGB da Base · {deviceSpec.dockName ?? 'Dock de Carga'}
+                </h2>
+                <p className="text-xs text-[#8B95A8] mt-0.5 font-mono tabular-nums">
+                  {gamepad.isDocked
+                    ? batteryPct >= 100
+                      ? 'Controle na Dock · Carga Completa (100%)'
+                      : `Carregando na Dock · ${batteryPct}% (falta ${remainingPct}% para 100%)`
+                    : `Controle fora da Dock · Bateria em ${batteryPct}% (falta ${remainingPct}% para 100%)`}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={onConnectDock}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0C0E12] hover:bg-[#1B202C] border border-white/[0.08] text-xs font-medium text-[#E2E8F0] transition-colors cursor-pointer"
+              >
+                <Usb className="w-3.5 h-3.5 text-[#F97316]" />
+                Reconhecer Dock (WebHID)
+              </button>
+              <button
+                type="button"
+                onClick={onApplyDockRgbToHardware}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#F97316] hover:bg-[#EA6A0E] text-[#0C0E12] text-xs font-semibold transition-colors cursor-pointer"
+              >
+                <Send className="w-3.5 h-3.5" />
+                Enviar RGB para Dock
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* Mode Cards */}
+            <div className="lg:col-span-7 grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+              {dockModeOptions.map((m) => {
+                const active = dock.mode === m.id;
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => onUpdateDock({ ...dock, mode: m.id })}
+                    className={`p-3 rounded-lg border text-left transition-colors cursor-pointer ${
+                      active
+                        ? 'bg-[#1F1A17] border-[#F97316]'
+                        : 'bg-[#0C0E12] border-white/[0.08] hover:border-white/20'
+                    }`}
+                  >
+                    <div
+                      className={`text-xs font-semibold ${
+                        active ? 'text-[#F97316]' : 'text-[#F4F6F9]'
+                      }`}
+                    >
+                      {m.title}
+                    </div>
+                    <div className="text-[11px] text-[#7D879B] mt-0.5 leading-snug">
+                      {m.subtitle}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Sliders, Swatches & Live Charge Color Readout */}
+            <div className="lg:col-span-5 bg-[#0C0E12] border border-white/[0.07] rounded-xl p-4 space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-xs text-[#CBD3E1]">
+                  <BatteryCharging className="w-4 h-4 text-[#22C55E]" />
+                  <span>Cor Efetiva na Base</span>
+                </div>
+                <div className="flex items-center gap-2 font-mono text-xs text-[#F4F6F9]">
+                  <span
+                    className="w-4 h-4 rounded border border-white/20"
+                    style={{ backgroundColor: effectiveDockColor }}
+                  />
+                  <span>
+                    {dock.mode === 'off'
+                      ? 'DESLIGADO'
+                      : dock.mode === 'rainbow'
+                      ? 'ARCO-ÍRIS'
+                      : effectiveDockColor.toUpperCase()}
+                  </span>
+                </div>
+              </div>
+
+              {dock.mode !== 'off' && (
+                <>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-[#9EA7B8]">Brilho da Base</span>
+                      <span className="font-mono tabular-nums text-[#F4F6F9]">
+                        {dock.brightness}%
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={10}
+                      max={100}
+                      step={5}
+                      value={dock.brightness}
+                      onChange={(e) =>
+                        onUpdateDock({ ...dock, brightness: Number(e.target.value) })
+                      }
+                      className="w-full hw-slider"
+                    />
+                  </div>
+
+                  {(dock.mode === 'breathing' || dock.mode === 'rainbow') && (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-[#9EA7B8]">Velocidade do Efeito</span>
+                        <span className="font-mono tabular-nums text-[#F4F6F9]">
+                          Nível {dock.speed} / 5
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min={1}
+                        max={5}
+                        step={1}
+                        value={dock.speed}
+                        onChange={(e) =>
+                          onUpdateDock({ ...dock, speed: Number(e.target.value) })
+                        }
+                        className="w-full hw-slider"
+                      />
+                    </div>
+                  )}
+
+                  {(dock.mode === 'static' || dock.mode === 'breathing') && (
+                    <div className="space-y-2.5 pt-2 border-t border-white/[0.06]">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-[#9EA7B8]">Cor Personalizada da Dock</span>
+                        <input
+                          type="color"
+                          value={dock.color}
+                          onChange={(e) => onUpdateDock({ ...dock, color: e.target.value })}
+                          className="w-9 h-7 rounded bg-transparent border border-white/15 cursor-pointer"
+                          aria-label="Cor personalizada da dock"
+                        />
+                      </div>
+                      <div className="grid grid-cols-5 gap-1.5">
+                        {HARDWARE_SWATCHES.slice(0, 5).map((sw) => (
+                          <button
+                            key={sw.hex}
+                            type="button"
+                            onClick={() => onUpdateDock({ ...dock, color: sw.hex })}
+                            title={sw.name}
+                            className={`h-7 rounded border cursor-pointer ${
+                              dock.color.toLowerCase() === sw.hex.toLowerCase()
+                                ? 'border-white ring-1 ring-[#F97316]'
+                                : 'border-white/15'
+                            }`}
+                            style={{ backgroundColor: sw.hex }}
+                            aria-label={`Cor da dock ${sw.name}`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {gamepad.dockRgbSyncStatus && (
+                <p
+                  className={`text-[11px] leading-relaxed pt-2 border-t border-white/[0.06] ${
+                    gamepad.dockRgbSyncStatus.sent ? 'text-[#22C55E]' : 'text-[#F59E0B]'
+                  }`}
+                >
+                  {gamepad.dockRgbSyncStatus.detail}
+                </p>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
     </div>
   );
 };

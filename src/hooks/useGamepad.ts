@@ -1,17 +1,37 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ConnectionMode,
+  DockConfig,
   PHYSICAL_BUTTONS,
   PhysicalButtonId,
+  RgbConfig,
   VibrationPulseStep,
 } from '../types/controller';
 import {
   DetectedHardwareInfo,
   MACHENIKE_VENDOR_IDS,
   MachenikeModelId,
+  getDeviceSpec,
   identifyMachenikeDevice,
+  isLikelyChargingDockName,
   saveTransportOverride,
 } from '../types/devices';
+import {
+  BleWritableCharacteristic,
+  HidDeviceHardware,
+  HidInputReportEventLike,
+  KEYLINKER_BLE_SERVICE_UUIDS,
+  RgbHardwareSyncResult,
+  parseHidBatteryInputReport,
+  pickBestConfigHidDevice,
+  transmitDockRgbOverBleGatt,
+  transmitDockRgbOverWebHid,
+  transmitRgbOverBleGatt,
+  transmitRgbOverWebHid,
+} from '../utils/rgbProtocol';
+
+export type DockConnectionSource = 'webhid-dock' | 'passthrough' | 'ble-gatt' | 'virtual' | null;
+export type BatteryTelemetrySource = 'gatt' | 'hid' | 'estimated';
 
 export interface LiveGamepadState {
   connected: boolean;
@@ -25,7 +45,16 @@ export interface LiveGamepadState {
   hidDeviceName: string | null;
   btConnected: boolean;
   btDeviceName: string | null;
+  hasWritableRgbChannel: boolean;
+  rgbSyncStatus: RgbHardwareSyncResult | null;
   batteryPercent: number | null;
+  batterySource: BatteryTelemetrySource;
+  dockDetected: boolean;
+  dockDeviceName: string | null;
+  dockConnectionSource: DockConnectionSource;
+  isDocked: boolean;
+  isCharging: boolean;
+  dockRgbSyncStatus: RgbHardwareSyncResult | null;
   pressedButtons: Set<PhysicalButtonId>;
   leftStick: { x: number; y: number };
   rightStick: { x: number; y: number };
@@ -36,31 +65,33 @@ export interface LiveGamepadState {
   activeMotorLevels: { left: number; right: number };
 }
 
-interface HidDeviceLike {
-  productName?: string;
-  vendorId?: number;
-  productId?: number;
-  open: () => Promise<void>;
-  opened?: boolean;
+interface BluetoothCharacteristicLike extends BleWritableCharacteristic {
+  readValue?: () => Promise<DataView>;
+}
+
+interface BluetoothServiceLike {
+  getCharacteristic: (name: string | number) => Promise<BluetoothCharacteristicLike>;
+  getCharacteristics?: () => Promise<BluetoothCharacteristicLike[]>;
+}
+
+interface BluetoothGattServerLike {
+  getPrimaryService: (name: string | number) => Promise<BluetoothServiceLike>;
+  getPrimaryServices?: () => Promise<BluetoothServiceLike[]>;
 }
 
 interface BluetoothDeviceLike {
   name?: string;
   gatt?: {
-    connect: () => Promise<{
-      getPrimaryService: (name: string) => Promise<{
-        getCharacteristic: (name: string) => Promise<{
-          readValue: () => Promise<DataView>;
-        }>;
-      }>;
-    }>;
+    connect: () => Promise<BluetoothGattServerLike>;
   };
 }
 
 interface NavigatorWithHardware extends Navigator {
   hid?: {
-    requestDevice: (options: { filters: Array<Record<string, unknown>> }) => Promise<HidDeviceLike[]>;
-    getDevices: () => Promise<HidDeviceLike[]>;
+    requestDevice: (options: {
+      filters: Array<Record<string, unknown>>;
+    }) => Promise<HidDeviceHardware[]>;
+    getDevices: () => Promise<HidDeviceHardware[]>;
   };
   bluetooth?: {
     requestDevice: (options: Record<string, unknown>) => Promise<BluetoothDeviceLike>;
@@ -85,7 +116,16 @@ export function useGamepad(
   const [hidDeviceName, setHidDeviceName] = useState<string | null>(null);
   const [btConnected, setBtConnected] = useState(false);
   const [btDeviceName, setBtDeviceName] = useState<string | null>(null);
-  const [batteryPercent, setBatteryPercent] = useState<number | null>(null);
+  const [hasWritableRgbChannel, setHasWritableRgbChannel] = useState(false);
+  const [rgbSyncStatus, setRgbSyncStatus] = useState<RgbHardwareSyncResult | null>(null);
+  const [batteryPercent, setBatteryPercent] = useState<number | null>(68);
+  const [batterySource, setBatterySource] = useState<BatteryTelemetrySource>('estimated');
+  const [dockDetected, setDockDetected] = useState(false);
+  const [dockDeviceName, setDockDeviceName] = useState<string | null>(null);
+  const [dockConnectionSource, setDockConnectionSource] = useState<DockConnectionSource>(null);
+  const [isDocked, setIsDocked] = useState(false);
+  const [isCharging, setIsCharging] = useState(false);
+  const [dockRgbSyncStatus, setDockRgbSyncStatus] = useState<RgbHardwareSyncResult | null>(null);
   const [connectionMessage, setConnectionMessage] = useState<string | null>(null);
 
   const [pressedButtons, setPressedButtons] = useState<Set<PhysicalButtonId>>(new Set());
@@ -114,6 +154,10 @@ export function useGamepad(
     rt: 0,
   });
 
+  const activeHidDeviceRef = useRef<HidDeviceHardware | null>(null);
+  const activeDockHidRef = useRef<HidDeviceHardware | null>(null);
+  const activeBleWriteCharRef = useRef<BleWritableCharacteristic | null>(null);
+  const hidListenerBoundRef = useRef<WeakSet<HidDeviceHardware>>(new WeakSet());
   const prevPhysicalButtonsRef = useRef<Set<PhysicalButtonId>>(new Set());
   const lastDetectedPadIdRef = useRef<string | null>(null);
   const onButtonPressRef = useRef(onButtonPress);
@@ -123,6 +167,29 @@ export function useGamepad(
 
   const patternCancelRef = useRef<number>(0);
 
+  const attachHidBatteryListener = useCallback((device: HidDeviceHardware) => {
+    if (!device.addEventListener || hidListenerBoundRef.current.has(device)) return;
+    const handler = (event: HidInputReportEventLike) => {
+      const parsed = parseHidBatteryInputReport(event.data);
+      if (!parsed) return;
+      setBatteryPercent(parsed.batteryPercent);
+      setBatterySource('hid');
+      setIsDocked(parsed.isDocked);
+      setIsCharging(parsed.isCharging && parsed.batteryPercent < 100);
+      if (parsed.isDocked) {
+        setDockDetected(true);
+        setDockConnectionSource((prev) => prev ?? 'passthrough');
+        setDockDeviceName((prev) => prev ?? (device.productName || 'Base de Carga Machenike'));
+      }
+    };
+    try {
+      device.addEventListener('inputreport', handler);
+      hidListenerBoundRef.current.add(device);
+    } catch {
+      // Ignore if environment restricts inputreport listener
+    }
+  }, []);
+
   const applyDetectedHardware = useCallback(
     (info: DetectedHardwareInfo, source: 'gamepad' | 'webhid' | 'bluetooth') => {
       setDetectedModelId(info.modelId);
@@ -130,6 +197,26 @@ export function useGamepad(
       setDetectionConfidence(info.confidence);
       setTransportConfidence(info.transportConfidence);
       setDetectionSource(source);
+
+      const spec = getDeviceSpec(info.modelId);
+      if (spec.hasChargingDock) {
+        if (isLikelyChargingDockName(info.rawName)) {
+          setDockDetected(true);
+          setDockDeviceName(info.rawName);
+          setDockConnectionSource(source === 'webhid' ? 'webhid-dock' : 'passthrough');
+        } else if (info.transport === 'dongle24g') {
+          setDockDetected(true);
+          setDockDeviceName(spec.dockName ?? 'Base de Carga Magnética RGB (Passthrough 2.4 GHz)');
+          setDockConnectionSource((prev) => (prev === 'webhid-dock' ? prev : 'passthrough'));
+        }
+      } else {
+        setDockDetected(false);
+        setDockDeviceName(null);
+        setDockConnectionSource(null);
+        setIsDocked(false);
+        setIsCharging(false);
+      }
+
       onHardwareDetectedRef.current?.(info, source);
     },
     []
@@ -145,6 +232,29 @@ export function useGamepad(
       }
     },
     [connected, hidConnected, btConnected, hidDeviceName, btDeviceName, deviceName]
+  );
+
+  const setDockedState = useCallback((docked: boolean) => {
+    setIsDocked(docked);
+    setBatteryPercent((prev) => {
+      const pct = prev ?? 68;
+      setIsCharging(docked && pct < 100);
+      return pct;
+    });
+    if (docked) {
+      setDockDetected(true);
+      setDockConnectionSource((prev) => prev ?? 'virtual');
+    }
+  }, []);
+
+  const setSimulatedBattery = useCallback(
+    (percent: number) => {
+      const clamped = Math.max(0, Math.min(100, Math.round(percent)));
+      setBatteryPercent(clamped);
+      setBatterySource('estimated');
+      setIsCharging(isDocked && clamped < 100);
+    },
+    [isDocked]
   );
 
   const setVirtualButton = useCallback((btn: PhysicalButtonId, down: boolean) => {
@@ -310,13 +420,126 @@ export function useGamepad(
     [emitHardwareRumble]
   );
 
-  // Pair USB-C or 2.4GHz Wireless Dongle via WebHID
+  // Transmit RGB lighting configuration to physical controller via WebHID or Bluetooth BLE GATT
+  const sendRgbToHardware = useCallback(
+    async (rgb: RgbConfig): Promise<RgbHardwareSyncResult> => {
+      if (activeHidDeviceRef.current) {
+        const res = await transmitRgbOverWebHid(activeHidDeviceRef.current, rgb);
+        setRgbSyncStatus(res);
+        if (res.sent) return res;
+      }
+
+      if (activeBleWriteCharRef.current) {
+        const res = await transmitRgbOverBleGatt(
+          activeBleWriteCharRef.current,
+          rgb,
+          btDeviceName
+        );
+        setRgbSyncStatus(res);
+        return res;
+      }
+
+      const fallback: RgbHardwareSyncResult = {
+        sent: false,
+        channel: 'none',
+        detail:
+          'Modo X-Input padrão (Gamepad API) não permite gravar LEDs RGB pelo navegador. Clique em "Vincular Canal HID" (USB / Dongle 2.4 GHz) ou "Vincular BLE (KeyLinker)" para enviar comandos aos LEDs físicos.',
+        timestamp: Date.now(),
+      };
+      setRgbSyncStatus(fallback);
+      return fallback;
+    },
+    [btDeviceName]
+  );
+
+  // Transmit Dock RGB lighting & power behavior frame via dedicated Dock WebHID, passthrough HID, or BLE GATT
+  const sendDockRgbToHardware = useCallback(
+    async (dock: DockConfig, controllerRgb: RgbConfig): Promise<RgbHardwareSyncResult> => {
+      const pct = batteryPercent ?? 68;
+      const targetHid = activeDockHidRef.current ?? activeHidDeviceRef.current;
+
+      if (targetHid) {
+        const res = await transmitDockRgbOverWebHid(targetHid, dock, controllerRgb, pct, isCharging);
+        setDockRgbSyncStatus(res);
+        if (res.sent) return res;
+      }
+
+      if (activeBleWriteCharRef.current) {
+        const res = await transmitDockRgbOverBleGatt(
+          activeBleWriteCharRef.current,
+          dock,
+          controllerRgb,
+          pct,
+          isCharging,
+          btDeviceName
+        );
+        setDockRgbSyncStatus(res);
+        return res;
+      }
+
+      const fallback: RgbHardwareSyncResult = {
+        sent: false,
+        channel: 'none',
+        detail:
+          'Nenhum canal HID/BLE ativo para a Dock de Carga. Clique em "Reconhecer Dock (WebHID)" com a base conectada via USB para gravar o RGB da base.',
+        timestamp: Date.now(),
+      };
+      setDockRgbSyncStatus(fallback);
+      return fallback;
+    },
+    [batteryPercent, isCharging, btDeviceName]
+  );
+
+  // Pair Charging Dock explicitly via WebHID
+  const requestDockDevice = useCallback(async () => {
+    const nav = navigator as NavigatorWithHardware;
+    if (!nav.hid) {
+      setConnectionMessage(
+        'WebHID não disponível neste navegador (use Chrome ou Edge). O painel da Dock continuará operando em modo interativo.'
+      );
+      return false;
+    }
+    try {
+      const filters = MACHENIKE_VENDOR_IDS.map((vendorId) => ({ vendorId }));
+      let devices = await nav.hid.requestDevice({ filters });
+      if (!devices || devices.length === 0) {
+        devices = await nav.hid.requestDevice({ filters: [] });
+      }
+      if (devices && devices.length > 0) {
+        const dockCandidate =
+          devices.find((d) => isLikelyChargingDockName(d.productName || '')) ??
+          pickBestConfigHidDevice(devices) ??
+          devices[0];
+        if (!dockCandidate.opened) {
+          await dockCandidate.open();
+        }
+        activeDockHidRef.current = dockCandidate;
+        attachHidBatteryListener(dockCandidate);
+        setHasWritableRgbChannel(true);
+        const rawName = dockCandidate.productName || 'Machenike Charging Dock HID';
+        setDockDetected(true);
+        setDockDeviceName(rawName);
+        setDockConnectionSource('webhid-dock');
+        setConnectionMessage(null);
+        return true;
+      }
+      setConnectionMessage('Nenhuma Dock de Carga selecionada.');
+      return false;
+    } catch {
+      setConnectionMessage(
+        'Pareamento WebHID da Dock cancelado ou bloqueado pelo ambiente (use Chrome/Edge fora do iframe ou o app Desktop).'
+      );
+      return false;
+    }
+  }, [attachHidBatteryListener]);
+
+  // Pair USB or 2.4GHz Wireless Dongle via WebHID (selecting vendor-defined writable collection)
   const requestHidDevice = useCallback(
     async (preferredTransport?: 'usb' | 'dongle24g') => {
       const nav = navigator as NavigatorWithHardware;
       if (!nav.hid) {
         setConnectionMessage(
-          'WebHID não disponível neste navegador. Conecte o controle via USB/2.4GHz e pressione qualquer botão para detecção automática via Gamepad API.'
+          'WebHID não disponível neste navegador (use Google Chrome ou Microsoft Edge). Conecte o controle e pressione qualquer botão para leitura de inputs.'
         );
         return false;
       }
@@ -327,11 +550,20 @@ export function useGamepad(
           devices = await nav.hid.requestDevice({ filters: [] });
         }
         if (devices && devices.length > 0) {
-          const device = devices[0];
+          const device = pickBestConfigHidDevice(devices) ?? devices[0];
           if (!device.opened) {
             await device.open();
           }
+          activeHidDeviceRef.current = device;
+          attachHidBatteryListener(device);
+          setHasWritableRgbChannel(true);
           const rawName = device.productName || 'Machenike Controller HID';
+          if (isLikelyChargingDockName(rawName)) {
+            activeDockHidRef.current = device;
+            setDockDetected(true);
+            setDockDeviceName(rawName);
+            setDockConnectionSource('webhid-dock');
+          }
           const detected = identifyMachenikeDevice(rawName, {
             vendorId: device.vendorId,
             productId: device.productId,
@@ -348,20 +580,20 @@ export function useGamepad(
         return false;
       } catch {
         setConnectionMessage(
-          'Pareamento WebHID cancelado ou bloqueado pelo ambiente. Pressione qualquer botão no controle conectado para detecção automática.'
+          'Pareamento WebHID cancelado ou bloqueado pelo ambiente. Para controlar LEDs RGB pelo navegador, execute o app fora do iframe (ex.: GitHub Pages ou Electron Desktop).'
         );
         return false;
       }
     },
-    [applyDetectedHardware]
+    [applyDetectedHardware, attachHidBatteryListener]
   );
 
-  // Pair Bluetooth Machenike Controller via Web Bluetooth API (+ read Battery GATT if available)
+  // Pair Bluetooth Machenike Controller via Web Bluetooth API (+ discover KeyLinker GATT RGB & Battery)
   const requestBluetoothDevice = useCallback(async () => {
     const nav = navigator as NavigatorWithHardware;
     if (!nav.bluetooth) {
       setConnectionMessage(
-        'Web Bluetooth não suportado neste navegador. Pareie o controle no Bluetooth do sistema operacional e pressione qualquer botão para detecção automática.'
+        'Web Bluetooth não suportado neste navegador. Use Chrome/Edge no PC ou Android para conectar o canal BLE (KeyLinker).'
       );
       return false;
     }
@@ -377,7 +609,7 @@ export function useGamepad(
           { namePrefix: 'Pro Controller' },
           { namePrefix: 'Xbox Wireless' },
         ],
-        optionalServices: ['battery_service'],
+        optionalServices: KEYLINKER_BLE_SERVICE_UUIDS,
       });
 
       const rawName = device.name || 'Machenike Bluetooth Controller';
@@ -388,22 +620,56 @@ export function useGamepad(
       setConnectionMessage(null);
       applyDetectedHardware(detected, 'bluetooth');
 
-      // Attempt reading battery level via standard Bluetooth GATT Battery Service
       if (device.gatt) {
         try {
           const server = await device.gatt.connect();
-          const service = await server.getPrimaryService('battery_service');
-          const char = await service.getCharacteristic('battery_level');
-          const value = await char.readValue();
-          setBatteryPercent(value.getUint8(0));
+          // 1. Read battery level if exposed
+          try {
+            const batteryService = await server.getPrimaryService('battery_service');
+            const char = await batteryService.getCharacteristic('battery_level');
+            if (char.readValue) {
+              const value = await char.readValue();
+              const pct = value.getUint8(0);
+              setBatteryPercent(pct);
+              setBatterySource('gatt');
+              setIsCharging((prev) => prev && pct < 100);
+            }
+          } catch {
+            // Battery service optional
+          }
+
+          // 2. Discover writable KeyLinker / ZhiXu configuration characteristic for RGB & Dock
+          const candidateServices: (number | string)[] = [0xfff0, 0xffe0, 0xae00, 0xff00];
+          for (const svcId of candidateServices) {
+            try {
+              const svc = await server.getPrimaryService(svcId);
+              if (svc.getCharacteristics) {
+                const chars = await svc.getCharacteristics();
+                const writable = chars.find(
+                  (c) => c.properties?.writeWithoutResponse || c.properties?.write
+                );
+                if (writable) {
+                  activeBleWriteCharRef.current = writable;
+                  setHasWritableRgbChannel(true);
+                  const spec = getDeviceSpec(detected.modelId);
+                  if (spec.hasChargingDock) {
+                    setDockConnectionSource((prev) => prev ?? 'ble-gatt');
+                  }
+                  break;
+                }
+              }
+            } catch {
+              // Service not present on this controller revision
+            }
+          }
         } catch {
-          // Battery service not exposed by this controller firmware
+          // GATT connection failed
         }
       }
       return true;
     } catch {
       setConnectionMessage(
-        'Busca Bluetooth cancelada ou indisponível. Se o controle já estiver pareado no sistema, pressione um botão para detecção automática.'
+        'Busca Bluetooth cancelada ou indisponível. Se o controle já estiver pareado no sistema, pressione um botão para leitura de inputs.'
       );
       return false;
     }
@@ -411,28 +677,35 @@ export function useGamepad(
 
   // Scan already-paired Gamepads & HID devices on demand
   const scanConnectedDevices = useCallback(async () => {
-    const pads = navigator.getGamepads ? Array.from(navigator.getGamepads()).filter(Boolean) : [];
-    if (pads.length > 0 && pads[0]) {
-      const pad = pads[0];
-      const detected = identifyMachenikeDevice(pad.id);
-      setConnected(true);
-      setDeviceName(pad.id);
-      lastDetectedPadIdRef.current = pad.id;
-      setConnectionMessage(null);
-      applyDetectedHardware(detected, 'gamepad');
-      return true;
-    }
-
     const nav = navigator as NavigatorWithHardware;
     if (nav.hid) {
       try {
         const hidDevices = await nav.hid.getDevices();
-        if (hidDevices.length > 0) {
-          const d = hidDevices[0];
-          const rawName = d.productName || 'Machenike HID';
+        const dockHid = hidDevices.find((d) => isLikelyChargingDockName(d.productName || ''));
+        if (dockHid) {
+          if (!dockHid.opened) {
+            await dockHid.open();
+          }
+          activeDockHidRef.current = dockHid;
+          attachHidBatteryListener(dockHid);
+          setDockDetected(true);
+          setDockDeviceName(dockHid.productName || 'Base de Carga Machenike');
+          setDockConnectionSource('webhid-dock');
+          setHasWritableRgbChannel(true);
+        }
+
+        const best = pickBestConfigHidDevice(hidDevices);
+        if (best) {
+          if (!best.opened) {
+            await best.open();
+          }
+          activeHidDeviceRef.current = best;
+          attachHidBatteryListener(best);
+          setHasWritableRgbChannel(true);
+          const rawName = best.productName || 'Machenike HID';
           const detected = identifyMachenikeDevice(rawName, {
-            vendorId: d.vendorId,
-            productId: d.productId,
+            vendorId: best.vendorId,
+            productId: best.productId,
           });
           setHidConnected(true);
           setHidDeviceName(rawName);
@@ -446,11 +719,23 @@ export function useGamepad(
       }
     }
 
+    const pads = navigator.getGamepads ? Array.from(navigator.getGamepads()).filter(Boolean) : [];
+    if (pads.length > 0 && pads[0]) {
+      const pad = pads[0];
+      const detected = identifyMachenikeDevice(pad.id);
+      setConnected(true);
+      setDeviceName(pad.id);
+      lastDetectedPadIdRef.current = pad.id;
+      setConnectionMessage(null);
+      applyDetectedHardware(detected, 'gamepad');
+      return true;
+    }
+
     setConnectionMessage(
-      'Nenhum controle físico ativo detectado agora. Conecte via cabo USB-C, receptor 2.4 GHz ou Bluetooth e pressione qualquer botão (A/Home) para acordar o dispositivo.'
+      'Nenhum controle físico ativo detectado agora. Conecte via Dongle 2.4 GHz, Cabo USB ou Bluetooth e pressione qualquer botão (A/Home) para acordar o dispositivo.'
     );
     return false;
-  }, [applyDetectedHardware]);
+  }, [applyDetectedHardware, attachHidBatteryListener]);
 
   useEffect(() => {
     let rafId = 0;
@@ -487,13 +772,40 @@ export function useGamepad(
     if (nav.hid) {
       nav.hid
         .getDevices()
-        .then((devices) => {
-          if (devices && devices.length > 0) {
-            const d = devices[0];
-            const rawName = d.productName || 'Machenike HID';
+        .then(async (devices) => {
+          const dockHid = devices.find((d) => isLikelyChargingDockName(d.productName || ''));
+          if (dockHid) {
+            try {
+              if (!dockHid.opened) {
+                await dockHid.open();
+              }
+            } catch {
+              // May already be open
+            }
+            activeDockHidRef.current = dockHid;
+            attachHidBatteryListener(dockHid);
+            setDockDetected(true);
+            setDockDeviceName(dockHid.productName || 'Base de Carga Machenike');
+            setDockConnectionSource('webhid-dock');
+            setHasWritableRgbChannel(true);
+          }
+
+          const best = pickBestConfigHidDevice(devices);
+          if (best) {
+            try {
+              if (!best.opened) {
+                await best.open();
+              }
+            } catch {
+              // May already be open
+            }
+            activeHidDeviceRef.current = best;
+            attachHidBatteryListener(best);
+            setHasWritableRgbChannel(true);
+            const rawName = best.productName || 'Machenike HID';
             const detected = identifyMachenikeDevice(rawName, {
-              vendorId: d.vendorId,
-              productId: d.productId,
+              vendorId: best.vendorId,
+              productId: best.productId,
             });
             setHidConnected(true);
             setHidDeviceName(rawName);
@@ -588,7 +900,7 @@ export function useGamepad(
       window.removeEventListener('gamepadconnected', handleConnect);
       window.removeEventListener('gamepaddisconnected', handleDisconnect);
     };
-  }, [applyDetectedHardware, hidConnected, btConnected]);
+  }, [applyDetectedHardware, attachHidBatteryListener, hidConnected, btConnected]);
 
   return {
     state: {
@@ -603,7 +915,16 @@ export function useGamepad(
       hidDeviceName,
       btConnected,
       btDeviceName,
+      hasWritableRgbChannel,
+      rgbSyncStatus,
       batteryPercent,
+      batterySource,
+      dockDetected,
+      dockDeviceName,
+      dockConnectionSource,
+      isDocked,
+      isCharging,
+      dockRgbSyncStatus,
       pressedButtons,
       leftStick,
       rightStick,
@@ -622,8 +943,13 @@ export function useGamepad(
     playVibrationPattern,
     stopVibrationPattern,
     requestHidDevice,
+    requestDockDevice,
     requestBluetoothDevice,
     scanConnectedDevices,
     overrideDetectedTransport,
+    sendRgbToHardware,
+    sendDockRgbToHardware,
+    setDockedState,
+    setSimulatedBattery,
   };
 }

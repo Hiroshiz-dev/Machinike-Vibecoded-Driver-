@@ -21,6 +21,9 @@ export interface MachenikeDeviceSpec {
   hasGyro: boolean;
   hasHallTriggers: boolean;
   hasChargingDock: boolean;
+  dockName?: string;
+  batteryCapacityMah: number;
+  dockChargeTimeMin: number; // Estimated 0-100% charge duration in minutes
   stickTech: string;
   switchTech: string;
   defaultAccent: string;
@@ -28,14 +31,14 @@ export interface MachenikeDeviceSpec {
   knownProductIds: number[];
 }
 
-export const MACHENIKE_VENDOR_IDS = [0x2345, 0x3537, 0x248a, 0x2dc8, 0x045e, 0x057e];
+export const MACHENIKE_VENDOR_IDS = [0x2345, 0x3537, 0x248a, 0x2dc8, 0x0079, 0x045e, 0x057e];
 
 export const MACHENIKE_DEVICES: MachenikeDeviceSpec[] = [
   {
     id: 'g5-pro-max',
     name: 'Machenike G5 Pro Max',
     shortName: 'G5PRO MAX',
-    tagline: 'Tri-Mode · Faceplate Magnética · Dock de Carga',
+    tagline: 'Tri-Mode · Faceplate Magnética · Dock de Carga RGB',
     supportedConnections: ['usb', 'dongle24g', 'bluetooth'],
     maxPollingRate: 1000,
     extraButtons: ['M1', 'M2'],
@@ -44,11 +47,14 @@ export const MACHENIKE_DEVICES: MachenikeDeviceSpec[] = [
     hasGyro: true,
     hasHallTriggers: true,
     hasChargingDock: true,
+    dockName: 'Base Magnética RGB G5 Pro Max',
+    batteryCapacityMah: 600,
+    dockChargeTimeMin: 120,
     stickTech: 'Hall-Effect Zero Drift',
     switchTech: 'Microswitch Mecânico Kailh',
     defaultAccent: '#F97316',
     matchKeywords: ['g5pro max', 'g5 pro max', 'g5promax', 'g5 max'],
-    knownProductIds: [0x5012, 0x5013],
+    knownProductIds: [0x5012, 0x5013, 0xe02f, 0xe02e, 0xe00b, 0x181c],
   },
   {
     id: 'g5-pro-v2',
@@ -63,6 +69,9 @@ export const MACHENIKE_DEVICES: MachenikeDeviceSpec[] = [
     hasGyro: true,
     hasHallTriggers: true,
     hasChargingDock: true,
+    dockName: 'Base Inteligente RGB G5 Pro V2',
+    batteryCapacityMah: 860,
+    dockChargeTimeMin: 135,
     stickTech: 'Hall-Effect JH20 Hot-Swap',
     switchTech: 'Microswitch Óptico Machenike',
     defaultAccent: '#38BDF8',
@@ -82,6 +91,9 @@ export const MACHENIKE_DEVICES: MachenikeDeviceSpec[] = [
     hasGyro: true,
     hasHallTriggers: true,
     hasChargingDock: true,
+    dockName: 'Dock Magnético RGB G6 Pro',
+    batteryCapacityMah: 860,
+    dockChargeTimeMin: 130,
     stickTech: 'K-Silver JH20 Hall-Effect',
     switchTech: 'Microswitch Óptico Kailh',
     defaultAccent: '#22C55E',
@@ -101,6 +113,8 @@ export const MACHENIKE_DEVICES: MachenikeDeviceSpec[] = [
     hasGyro: true,
     hasHallTriggers: true,
     hasChargingDock: false,
+    batteryCapacityMah: 600,
+    dockChargeTimeMin: 120,
     stickTech: 'Hall-Effect',
     switchTech: 'Mecha-Tactile Kailh',
     defaultAccent: '#F97316',
@@ -120,6 +134,8 @@ export const MACHENIKE_DEVICES: MachenikeDeviceSpec[] = [
     hasGyro: false,
     hasHallTriggers: true,
     hasChargingDock: false,
+    batteryCapacityMah: 600,
+    dockChargeTimeMin: 120,
     stickTech: 'Hall-Effect',
     switchTech: 'Membrana Condutiva Rápida',
     defaultAccent: '#38BDF8',
@@ -139,6 +155,8 @@ export const MACHENIKE_DEVICES: MachenikeDeviceSpec[] = [
     hasGyro: false,
     hasHallTriggers: true,
     hasChargingDock: false,
+    batteryCapacityMah: 600,
+    dockChargeTimeMin: 120,
     stickTech: 'TMR / Hall-Effect',
     switchTech: 'Membrana Tátil',
     defaultAccent: '#F59E0B',
@@ -146,6 +164,19 @@ export const MACHENIKE_DEVICES: MachenikeDeviceSpec[] = [
     knownProductIds: [0x1001, 0x1002],
   },
 ];
+
+export function isLikelyChargingDockName(rawName: string): boolean {
+  const lower = (rawName || '').toLowerCase();
+  return (
+    lower.includes('dock') ||
+    lower.includes('base') ||
+    lower.includes('charging') ||
+    lower.includes('charger') ||
+    lower.includes('cradle') ||
+    lower.includes('station') ||
+    lower.includes('passthrough')
+  );
+}
 
 export function getDeviceSpec(id: MachenikeModelId): MachenikeDeviceSpec {
   return MACHENIKE_DEVICES.find((d) => d.id === id) ?? MACHENIKE_DEVICES[0];

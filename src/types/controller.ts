@@ -71,6 +71,34 @@ export interface RgbConfig {
   direction: 'ltr' | 'rtl' | 'center';
 }
 
+export type DockRgbMode =
+  | 'sync'
+  | 'battery-indicator'
+  | 'static'
+  | 'breathing'
+  | 'rainbow'
+  | 'off';
+
+export interface DockConfig {
+  mode: DockRgbMode;
+  color: string;
+  brightness: number; // 0 - 100
+  speed: number; // 1 - 5
+  autoWakeOnLift: boolean;
+  showChargeProgressLed: boolean;
+}
+
+export function createDefaultDockConfig(): DockConfig {
+  return {
+    mode: 'battery-indicator',
+    color: '#F97316',
+    brightness: 80,
+    speed: 3,
+    autoWakeOnLift: true,
+    showChargeProgressLed: true,
+  };
+}
+
 export type StickCurvePreset = 'linear' | 'precision' | 'aggressive' | 'classic';
 export type OuterRingMode = 'circular' | 'square';
 
@@ -155,6 +183,7 @@ export interface ControllerProfile {
   bindings: Record<PhysicalButtonId, ButtonBinding>;
   macros: MacroDefinition[];
   rgb: RgbConfig;
+  dock: DockConfig;
   driver: DriverConfig;
   createdAt: string;
   updatedAt: string;
@@ -581,6 +610,11 @@ export function createInitialProfiles(): ControllerProfile[] {
         reactiveColor: '#FFFFFF',
         direction: 'center',
       },
+      dock: {
+        ...createDefaultDockConfig(),
+        mode: 'battery-indicator',
+        color: '#F97316',
+      },
       driver: {
         ...createFactoryDriverConfig(),
         pollingRate: 1000,
@@ -641,6 +675,11 @@ export function createInitialProfiles(): ControllerProfile[] {
         reactiveColor: '#FACC15',
         direction: 'ltr',
       },
+      dock: {
+        ...createDefaultDockConfig(),
+        mode: 'breathing',
+        color: '#EF4444',
+      },
       driver: {
         ...createFactoryDriverConfig(),
         pollingRate: 1000,
@@ -699,6 +738,11 @@ export function createInitialProfiles(): ControllerProfile[] {
         reactiveColor: '#38BDF8',
         direction: 'ltr',
       },
+      dock: {
+        ...createDefaultDockConfig(),
+        mode: 'static',
+        color: '#38BDF8',
+      },
       driver: {
         ...createFactoryDriverConfig(),
         pollingRate: 500,
@@ -756,6 +800,11 @@ export function createInitialProfiles(): ControllerProfile[] {
         },
         reactiveColor: '#FFFFFF',
         direction: 'ltr',
+      },
+      dock: {
+        ...createDefaultDockConfig(),
+        mode: 'sync',
+        color: '#F97316',
       },
       driver: {
         ...createFactoryDriverConfig(),
